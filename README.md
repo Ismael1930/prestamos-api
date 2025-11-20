@@ -105,28 +105,13 @@ API REST desarrollada con NestJS que implementa un sistema completo de gestión 
    # Modo desarrollo (con hot-reload)
    npm run start:dev
    
-   # Modo producción
-   npm run build
-   npm run start:prod
    ```
 
 6. **Verificar que funciona**
    - API: http://localhost:3000/api
    - Swagger UI: http://localhost:3000/api/docs
 
-### Instalación sin Docker
 
-Si prefieres no usar Docker:
-
-1. Instalar PostgreSQL localmente
-2. Crear la base de datos:
-   ```sql
-   CREATE DATABASE prestamos_db;
-   ```
-3. Configurar el `.env` con tus credenciales de PostgreSQL
-4. Ejecutar la aplicación con `npm run start:dev`
-
-## Instalación
 
 ## Documentación de la API
 
