@@ -4,7 +4,7 @@ API REST desarrollada con NestJS que implementa un sistema completo de gestión 
 
 ## Características Implementadas
 
-### ✅ Requisitos Técnicos
+### Requisitos Técnicos
 - **Framework**: NestJS
 - **Autenticación**: JWT (JSON Web Tokens)
 - **Documentación**: Swagger UI
@@ -13,7 +13,7 @@ API REST desarrollada con NestJS que implementa un sistema completo de gestión 
 - **Prefijo Global**: `/api`
 - **Versionado**: URI Versioning (v1.0, v2.0)
 
-### ✅ Funcionalidades
+### Funcionalidades
 
 #### 1. Autenticación de Usuario
 - `POST /api/v1.0/user` - Crear nuevo usuario
@@ -44,29 +44,36 @@ API REST desarrollada con NestJS que implementa un sistema completo de gestión 
 - `POST /api/v1.0/loan/abono` - Realizar abono adicional
 - Recálculo automático de cuotas para préstamos de cuota fija
 
-## Instalación
+## Instalación y Configuración
 
 ### Prerrequisitos
 - Node.js (v16 o superior)
-- PostgreSQL (v12 o superior)
-- npm
+- Docker y Docker Compose (recomendado)
+- npm o yarn
 
-### Pasos de Instalación
+### Pasos para Clonar y Ejecutar
 
-1. **Instalar dependencias**
+1. **Clonar el repositorio**
    ```bash
-   npm install
+   git clone https://github.com/Ismael1930/prestamos-api.git
+   cd prestamos-api
    ```
 
-2. **Configurar base de datos**
-   - Crear una base de datos PostgreSQL:
-   ```sql
-   CREATE DATABASE prestamos_db;
+2. **Instalar dependencias**
+   ```bash
+   npm install
+   # o
+   yarn install
    ```
 
 3. **Configurar variables de entorno**
    
-   Editar el archivo `.env` con tus credenciales:
+   Crear un archivo `.env` en la raíz del proyecto (copia de `.env.example`):
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Editar el archivo `.env` con tus configuraciones:
    ```env
    PORT=3000
 
@@ -74,23 +81,52 @@ API REST desarrollada con NestJS que implementa un sistema completo de gestión 
    DB_HOST=localhost
    DB_PORT=5432
    DB_USERNAME=postgres
-   DB_PASSWORD=tu_password
+   DB_PASSWORD=postgres
    DB_DATABASE=prestamos_db
+   DB_NAME=prestamos_db
 
    # JWT Configuration
-   JWT_SECRET=tu-secret-key-super-seguro
+   JWT_SECRET=tu-secret-key-super-seguro-cambiar-en-produccion
    JWT_EXPIRATION=24h
    ```
 
-4. **Iniciar la aplicación**
+4. **Iniciar la base de datos con Docker**
    ```bash
-   # Modo desarrollo
-   npm run start:dev
+   docker compose up -d
+   ```
+   
+   Esto creará automáticamente:
+   - Contenedor de PostgreSQL
+   - Base de datos `prestamos_db`
+   - Puerto 5432 expuesto
 
+5. **Iniciar la aplicación**
+   ```bash
+   # Modo desarrollo (con hot-reload)
+   npm run start:dev
+   
    # Modo producción
    npm run build
    npm run start:prod
    ```
+
+6. **Verificar que funciona**
+   - API: http://localhost:3000/api
+   - Swagger UI: http://localhost:3000/api/docs
+
+### Instalación sin Docker
+
+Si prefieres no usar Docker:
+
+1. Instalar PostgreSQL localmente
+2. Crear la base de datos:
+   ```sql
+   CREATE DATABASE prestamos_db;
+   ```
+3. Configurar el `.env` con tus credenciales de PostgreSQL
+4. Ejecutar la aplicación con `npm run start:dev`
+
+## Instalación
 
 ## Documentación de la API
 
@@ -131,68 +167,14 @@ src/
 └── main.ts
 ```
 
-## Uso de la API
-
-### 1. Crear Usuario
-
-```bash
-POST http://localhost:3000/api/v1.0/user
-Content-Type: application/json
-
-{
-  "email": "john@example.com",
-  "password": "SecurePass123",
-  "firstName": "John",
-  "lastName": "Doe"
-}
-```
-
-### 2. Autenticarse
-
-```bash
-POST http://localhost:3000/api/v1.0/auth
-Content-Type: application/json
-
-{
-  "email": "john@example.com",
-  "password": "SecurePass123"
-}
-```
-
-### 3. Crear Solicitud de Préstamo
-
-```bash
-POST http://localhost:3000/api/v1.0/loan
-Authorization: Bearer {access_token}
-Content-Type: application/json
-
-{
-  "amount": 10000,
-  "termMonths": 12,
-  "interestRate": 5.5,
-  "amortizationType": "FIXED"
-}
-```
-
-### 4. Calcular Amortización
-
-```bash
-POST http://localhost:3000/api/v1.0/loan/amor
-Authorization: Bearer {access_token}
-Content-Type: application/json
-
-{
-  "loanId": "uuid-del-prestamo"
-}
-```
 
 ## Tipos de Amortización
 
-### Cuota Fija (FIXED - Método Francés)
+### Cuota Fija (FIXED)
 - La cuota mensual permanece constante durante todo el plazo
 - Los intereses disminuyen y el capital aumenta progresivamente
 
-### Cuota Variable (VARIABLE - Método Alemán)
+### Cuota Variable (VARIABLE)
 - El capital se amortiza de forma constante
 - Los intereses varían según el saldo pendiente
 - Las cuotas iniciales son más altas y van disminuyendo
@@ -223,40 +205,4 @@ Content-Type: application/json
 ### Abonos
 - No puede exceder el saldo pendiente
 
-## Seguridad
 
-- Todos los endpoints (excepto registro y login) requieren autenticación JWT
-- Las contraseñas se almacenan hasheadas con bcrypt
-- Validación de datos con DTOs y class-validator
-- Los usuarios solo pueden acceder a sus propios préstamos
-
-## Scripts Disponibles
-
-```bash
-# Desarrollo
-npm run start:dev
-
-# Producción
-npm run build
-npm run start:prod
-
-# Tests
-npm run test
-npm run test:e2e
-npm run test:cov
-```
-
-## Tecnologías Utilizadas
-
-- **NestJS**: Framework progresivo de Node.js
-- **TypeScript**: Superset tipado de JavaScript
-- **PostgreSQL**: Base de datos relacional
-- **TypeORM**: ORM para TypeScript
-- **Passport JWT**: Autenticación con tokens
-- **Swagger**: Documentación de API
-- **class-validator**: Validación de DTOs
-- **bcrypt**: Hash de contraseñas
-
----
-
-**Desarrollado con NestJS** 🚀
