@@ -12,8 +12,8 @@ export enum LoanStatus {
 }
 
 export enum AmortizationType {
-  FIXED = 'FIXED', // Cuota fija
-  VARIABLE = 'VARIABLE', // Cuota variable
+  FIXED = 'FIXED', 
+  VARIABLE = 'VARIABLE', 
 }
 
 @Entity('loans')
@@ -66,10 +66,14 @@ export class Loan {
   @Column()
   userId: string;
 
-  @OneToMany(() => LoanPayment, (payment: LoanPayment) => payment.loan)
+  @OneToMany(() => LoanPayment, (payment: LoanPayment) => payment.loan, {
+    cascade: true,
+  })
   payments: LoanPayment[];
 
-  @OneToMany(() => LoanAbono, (abono: LoanAbono) => abono.loan)
+  @OneToMany(() => LoanAbono, (abono: LoanAbono) => abono.loan, {
+    cascade: true,
+  })
   abonos: LoanAbono[];
 
   @CreateDateColumn()

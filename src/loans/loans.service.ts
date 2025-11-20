@@ -50,15 +50,18 @@ export class LoansService {
   }
 
   async findOne(id: string, userId: string): Promise<Loan> {
-    const loan = await this.loansRepository
-      .createQueryBuilder('loan')
-      .leftJoinAndSelect('loan.payments', 'payments')
-      .leftJoinAndSelect('loan.abonos', 'abonos')
-      .where('loan.id = :id', { id })
-      .andWhere('loan.userId = :userId', { userId })
-      .orderBy('payments.paymentNumber', 'ASC')
-      .addOrderBy('abonos.abonoDate', 'ASC')
-      .getOne();
+    const loan = await this.loansRepository.findOne({
+      where: { id, userId },
+      relations: ['payments', 'abonos'],
+      order: {
+        payments: {
+          paymentNumber: 'ASC',
+        },
+        abonos: {
+          abonoDate: 'ASC',
+        },
+      },
+    });
 
     if (!loan) {
       throw new NotFoundException('Loan not found');
@@ -164,20 +167,6 @@ export class LoansService {
       where: { loan: { id: paymentDto.loanId } },
     });
 
-    // Calcular la amortización para obtener los detalles de la cuota
-    const amortization = this.amortizationService.calculateAmortization(
-      loan.amount,
-      loan.interestRate,
-      loan.termMonths,
-      loan.amortizationType,
-    );
-
-    const scheduleItem = amortization.find(item => item.paymentNumber === paymentDto.paymentNumber);
-
-    if (!scheduleItem) {
-      throw new BadRequestException('Invalid payment number');
-    }
-
     // Validar que se estén pagando las cuotas en orden
     if (paymentDto.paymentNumber !== previousPayments + 1) {
       throw new BadRequestException(
@@ -185,49 +174,46 @@ export class LoansService {
       );
     }
 
+    // Calcular los detalles del pago con base en el saldo ACTUAL (después de abonos)
+    const currentBalance = loan.remainingBalance;
+    const monthlyRate = loan.interestRate / 100 / 12;
+    const remainingMonths = loan.termMonths - previousPayments;
+    
+    // Calcular interés sobre el saldo actual
+    const interest = currentBalance * monthlyRate;
+    
+    // Usar la cuota mensual actual del préstamo (que se recalcula con cada abono)
+    const paymentAmount = loan.monthlyPayment;
+    const principal = paymentAmount - interest;
+    const newRemainingBalance = currentBalance - principal;
+
     // Validar que el monto sea suficiente
-    if (paymentDto.amount < scheduleItem.paymentAmount) {
+    if (paymentDto.amount < paymentAmount) {
       throw new BadRequestException(
-        `Payment amount must be at least ${scheduleItem.paymentAmount}`,
+        `Payment amount must be at least ${paymentAmount.toFixed(2)}`,
       );
     }
 
     const payment = this.paymentsRepository.create({
-      loan: loan,
+      loan: { id: paymentDto.loanId } as Loan,
       paymentNumber: paymentDto.paymentNumber,
-      amount: scheduleItem.paymentAmount,
-      principal: scheduleItem.principal,
-      interest: scheduleItem.interest,
-      remainingBalance: scheduleItem.remainingBalance,
+      amount: paymentAmount,
+      principal: principal,
+      interest: interest,
+      remainingBalance: newRemainingBalance,
       paymentDate: new Date(),
     });
 
     await this.paymentsRepository.save(payment);
 
-    // Actualizar el saldo pendiente del préstamo
-    loan.remainingBalance = scheduleItem.remainingBalance;
-    
-    if (loan.remainingBalance <= 0) {
-      loan.status = LoanStatus.PAID;
-    }
-
-    await this.loansRepository.save(loan);
+    // Actualizar el saldo pendiente del préstamo directamente sin cargar la entidad completa
+    await this.loansRepository.update(loan.id, {
+      remainingBalance: newRemainingBalance,
+      status: newRemainingBalance <= 0 ? LoanStatus.PAID : loan.status,
+    });
 
     // Retornar el préstamo actualizado con sus pagos y abonos
-    const updatedLoan = await this.loansRepository
-      .createQueryBuilder('loan')
-      .leftJoinAndSelect('loan.payments', 'payments')
-      .leftJoinAndSelect('loan.abonos', 'abonos')
-      .where('loan.id = :id', { id: loan.id })
-      .orderBy('payments.paymentNumber', 'ASC')
-      .addOrderBy('abonos.abonoDate', 'ASC')
-      .getOne();
-    
-    if (!updatedLoan) {
-      throw new NotFoundException('Loan not found after update');
-    }
-    
-    return updatedLoan;
+    return this.findOne(loan.id, userId);
   }
 
   async registerAbono(abonoDto: AbonoDto, userId: string): Promise<Loan> {
@@ -245,7 +231,7 @@ export class LoansService {
     const remainingBalanceAfter = loan.remainingBalance - abonoDto.amount;
 
     const abono = this.abonosRepository.create({
-      loan: loan,
+      loan: { id: abonoDto.loanId } as Loan,
       amount: abonoDto.amount,
       remainingBalanceBefore,
       remainingBalanceAfter,
@@ -255,8 +241,10 @@ export class LoansService {
 
     await this.abonosRepository.save(abono);
 
-    // Actualizar el préstamo
-    loan.remainingBalance = remainingBalanceAfter;
+    // Calcular nuevos valores
+    const newRemainingBalance = remainingBalanceAfter;
+    let newMonthlyPayment = loan.monthlyPayment;
+    let newStatus: LoanStatus = loan.status;
     
     // Recalcular la cuota mensual si es amortización fija
     if (loan.amortizationType === AmortizationType.FIXED) {
@@ -267,34 +255,26 @@ export class LoansService {
       const remainingMonths = loan.termMonths - paymentsCount;
       
       if (remainingMonths > 0) {
-        loan.monthlyPayment = this.amortizationService.calculateMonthlyPayment(
-          loan.remainingBalance,
+        newMonthlyPayment = this.amortizationService.calculateMonthlyPayment(
+          newRemainingBalance,
           loan.interestRate,
           remainingMonths,
         );
       }
     }
 
-    if (loan.remainingBalance <= 0) {
-      loan.status = LoanStatus.PAID;
+    if (newRemainingBalance <= 0) {
+      newStatus = LoanStatus.PAID;
     }
 
-    await this.loansRepository.save(loan);
+    // Actualizar el préstamo directamente sin cargar la entidad completa
+    await this.loansRepository.update(loan.id, {
+      remainingBalance: newRemainingBalance,
+      monthlyPayment: newMonthlyPayment,
+      status: newStatus,
+    });
 
     // Retornar el préstamo actualizado con sus pagos y abonos
-    const updatedLoan = await this.loansRepository
-      .createQueryBuilder('loan')
-      .leftJoinAndSelect('loan.payments', 'payments')
-      .leftJoinAndSelect('loan.abonos', 'abonos')
-      .where('loan.id = :id', { id: loan.id })
-      .orderBy('payments.paymentNumber', 'ASC')
-      .addOrderBy('abonos.abonoDate', 'ASC')
-      .getOne();
-    
-    if (!updatedLoan) {
-      throw new NotFoundException('Loan not found after update');
-    }
-    
-    return updatedLoan;
+    return this.findOne(loan.id, userId);
   }
 }

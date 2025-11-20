@@ -24,7 +24,7 @@ export class LoanPayment {
   @Column({ type: 'timestamp' })
   paymentDate: Date;
 
-  @ManyToOne(() => Loan, loan => loan.payments)
+  @ManyToOne(() => Loan, loan => loan.payments, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'loanId' })
   loan: Loan;
 
